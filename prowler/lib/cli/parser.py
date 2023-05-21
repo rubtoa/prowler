@@ -6,7 +6,6 @@ from prowler.config.config import (
     available_compliance_frameworks,
     check_current_version,
     default_output_directory,
-    prowler_version,
 )
 from prowler.providers.aws.aws_provider import get_aws_available_regions
 from prowler.providers.aws.lib.arn.arn import is_valid_arn
@@ -36,8 +35,7 @@ Detailed documentation at https://docs.prowler.cloud
         self.parser.add_argument(
             "-v",
             "--version",
-            action="version",
-            version=f"Prowler {prowler_version} {check_current_version(prowler_version)}",
+            action="store_true",
             help="show Prowler version",
         )
         # Common arguments parser
@@ -67,6 +65,10 @@ Detailed documentation at https://docs.prowler.cloud
         # We can override sys.argv
         if args:
             sys.argv = args
+
+        if len(sys.argv) == 2 and sys.argv[1] in ("-v", "--version"):
+            print(check_current_version())
+            sys.exit(0)
 
         # Set AWS as the default provider if no provider is supplied
         if len(sys.argv) == 1:
@@ -151,6 +153,11 @@ Detailed documentation at https://docs.prowler.cloud
         )
         common_outputs_parser.add_argument(
             "-b", "--no-banner", action="store_true", help="Hide Prowler banner"
+        )
+        common_outputs_parser.add_argument(
+            "--slack",
+            action="store_true",
+            help="Send a summary of the execution with a Slack APP in your channel. Environment variables SLACK_API_TOKEN and SLACK_CHANNEL_ID are required (see more in https://docs.prowler.cloud/en/latest/tutorials/integrations/#slack).",
         )
 
     def __init_logging_parser__(self):

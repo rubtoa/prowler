@@ -61,6 +61,7 @@ repos:
     hooks:
       - id: poetry-check
       - id: poetry-lock
+        args: ["--no-update"]
 
   - repo: https://github.com/hadolint/hadolint
     rev: v2.12.1-beta
@@ -74,6 +75,15 @@ repos:
         name: pylint
         entry: bash -c 'pylint --disable=W,C,R,E -j 0 -rn -sn prowler/'
         language: system
+
+      - id: trufflehog
+        name: TruffleHog
+        description: Detect secrets in your data.
+        # entry: bash -c 'trufflehog git file://. --only-verified --fail'
+        # For running trufflehog in docker, use the following entry instead:
+        entry: bash -c 'docker run -v "$(pwd):/workdir" -i --rm trufflesecurity/trufflehog:latest git file:///workdir --only-verified --fail'
+        language: system
+        stages: ["commit", "push"]
 
       - id: pytest-check
         name: pytest-check

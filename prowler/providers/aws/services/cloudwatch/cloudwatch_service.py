@@ -2,6 +2,7 @@ import threading
 from datetime import datetime, timezone
 from typing import Optional
 
+from botocore.exceptions import ClientError
 from pydantic import BaseModel
 
 from prowler.lib.logger import logger
@@ -152,17 +153,18 @@ class Logs:
                     if not self.audit_resources or (
                         is_resource_filtered(log_group["arn"], self.audit_resources)
                     ):
-                        kms = None
-                        retention_days = 0
-                        if "kmsKeyId" in log_group:
-                            kms = log_group["kmsKeyId"]
-                        if "retentionInDays" in log_group:
-                            retention_days = log_group["retentionInDays"]
+                        never_expire = False
+                        kms = log_group.get("kmsKeyId")
+                        retention_days = log_group.get("retentionInDays")
+                        if not retention_days:
+                            never_expire = True
+                            retention_days = 9999
                         self.log_groups.append(
                             LogGroup(
                                 arn=log_group["arn"],
                                 name=log_group["logGroupName"],
                                 retention_days=retention_days,
+                                never_expire=never_expire,
                                 kms_id=kms,
                                 region=regional_client.region,
                             )
@@ -208,11 +210,17 @@ class Logs:
         logger.info("CloudWatch Logs - List Tags...")
         try:
             for log_group in self.log_groups:
-                regional_client = self.regional_clients[log_group.region]
-                response = regional_client.list_tags_for_resource(
-                    resourceArn=log_group.arn.replace(":*", "")  # Remove the tailing :*
-                )["tags"]
-                log_group.tags = [response]
+                try:
+                    regional_client = self.regional_clients[log_group.region]
+                    response = regional_client.list_tags_log_group(
+                        logGroupName=log_group.name
+                    )["tags"]
+                    log_group.tags = [response]
+                except ClientError as error:
+                    if error.response["Error"]["Code"] == "ResourceNotFoundException":
+                        log_group.tags = []
+
+                    continue
         except Exception as error:
             logger.error(
                 f"{regional_client.region} -- {error.__class__.__name__}[{error.__traceback__.tb_lineno}]: {error}"
@@ -240,6 +248,7 @@ class LogGroup(BaseModel):
     arn: str
     name: str
     retention_days: int
+    never_expire: bool
     kms_id: Optional[str]
     region: str
     log_streams: dict[
